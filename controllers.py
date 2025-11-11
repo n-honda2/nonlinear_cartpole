@@ -24,7 +24,7 @@ class LQRController(BaseController):
             [0, 0, 0, 1],
             [0, 0, (M + mp) * g / (M * L), 0]
         ])
-        B = np.array([[0], [1 / M], [0], [1 / (M * L)]])
+        B = np.array([[0], [1 / M], [0], [-1 / (M * L)]])
         
         # Define custos (Q para estados, R para controle)
         Q = np.diag([1, 1, 10, 1])  # Penaliza mais o ângulo
@@ -38,18 +38,20 @@ class LQRController(BaseController):
         # u = -Kx
         # state precisa ser (4,1) para a multiplicação
         state_col = state.reshape(4, 1)
-        force_array = np.dot(self.K, state_col)
-        
-        return force_array[0, 0] # Retorna a força como um escalar
+        force_array = -np.dot(self.K, state_col)
+        force = force_array[0, 0]
+
+        return force / 100.0  # Converte para sinal de controle adequado
 
 # --- Controlador por Linearização Exata (FL) ---
 class FLController(BaseController):
-    def __init__(self, kp, kd):
+    def __init__(self, kp_th, kd_th, kp_x, kd_x):
         super().__init__()
-        # Ganhos do controlador PD para o sistema linearizado v
-        self.kp = kp 
-        self.kd = kd
-        print(f"Controlador FL inicializado com Kp={kp}, Kd={kd}")
+        self.kp_th = kp_th
+        self.kd_th = kd_th
+        self.kp_x = kp_x
+        self.kd_x = kd_x
+        print(f"Controlador FL inicializado com Kp_th={kp_th}, Kd_th={kd_th}, Kp_x={kp_x}, Kd_x={kd_x}")
 
     def compute_action(self, state):
         # Desempacota o estado
@@ -62,7 +64,10 @@ class FLController(BaseController):
             return 0.0 
         
         # 1. Calcula o controle linear 'v'
-        v = -self.kp * theta - self.kd * theta_dot
+        v_theta = -self.kp_th * theta - self.kd_th * theta_dot
+        v_x = -self.kp_x * x - self.kd_x * x_dot
+
+        v = v_theta + v_x
         
         # 2. Calcula a lei de controle não linear 'u'
         sin_th = np.sin(theta)
@@ -79,4 +84,4 @@ class FLController(BaseController):
         
         u = (v - f_x) / g_x
         
-        return -u
+        return -u / 100.0  # Converte para sinal de controle adequado

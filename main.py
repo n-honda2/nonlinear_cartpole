@@ -2,43 +2,57 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 from controllers import LQRController, FLController
-import custom_envs 
-
-custom_envs.register_env()
+import mujoco
 
 def run_simulation(controller, start_angle, render=True):
-    """Roda uma simulação e retorna os dados."""
-    env = gym.make("ContinuousCartPole-v0", render_mode="human" if render else None)
+    """Roda uma simulação com o ambiente InvertedPendulum-v4."""
     
-    # Define o ângulo inicial
-    # obs, info = env.reset(seed=42)
-    # env.unwrapped.state = [0, 0, start_angle, 0] # Define o estado manualmente
-    # obs = np.array(env.unwrapped.state)
+    # --- USA O AMBIENTE MUJOCO CORRETO ---
+    env = gym.make("InvertedPendulum-v5", render_mode="human" if render else None)
     
-    # A API nova do Gymnasium recomenda passar opções no reset
+    # O estado do InvertedPendulum é [x, x_dot, cos(theta), sin(theta), theta_dot]
+    # Precisamos ser mais espertos para definir o estado inicial.
     obs, info = env.reset(seed=42)
-    obs = np.array([0, 0, start_angle, 0])
-    env.unwrapped.state = obs
-
-    data = {'time': [], 'theta': [], 'force': []}
     
-    for t in range(5000): # Simula por 500 passos (10 segundos)
-        # 1. Calcula a força contínua
-        force = controller.compute_action(obs)
-        
-        # 2. Prepara a ação para o ambiente
-        # Ação agora é um array numpy, ex: [2.5]
-        # Também vamos limitar (saturar) a força para o máximo do atuador
-        max_force = env.action_space.high[0]
-        action = np.clip(force, -max_force, max_force)
+    # Define o estado manualmente (x, x_dot, theta, theta_dot)
+    # qpos = [x, theta], qvel = [x_dot, theta_dot]
+    qpos = np.array([0.0, start_angle]) # [pos_carrinho, angulo_pendulo]
+    qvel = np.array([0.0, 0.0])       # [vel_carrinho, vel_pendulo]
+    env.unwrapped.set_state(qpos, qvel)
+    obs, _, _, _, _ = env.step(np.array([0.0])) # Pega a observação inicial
 
-        # 3. Aplica a ação no ambiente
+    data = {'time': [], 'theta': [], 'force_signal': []}
+    
+    for t in range(500):
+        # O estado do LQR/FL é [x, x_dot, theta, theta_dot]
+        # A observação 'obs' do InvertedPendulum é [x, x_dot, cos, sin, theta_dot]
+        # Vamos construir o estado que nossos controladores entendem
+        x = obs[0]
+        x_dot = obs[1]
+        theta = np.arctan2(obs[3], obs[2]) # atan2(sin, cos)
+        theta_dot = obs[3]
+        
+        # NÓS PRECISAMOS: state = [x, x_dot, theta, theta_dot]
+        # Vamos remapear 'obs' para 'current_state'
+        current_state = np.array([
+            obs[0],  # x
+            obs[2],  # x_dot
+            obs[1],  # theta
+            obs[3]   # theta_dot
+        ])
+        # 1. Calcula o sinal de controle (u_ctrl)
+        u_ctrl = controller.compute_action(current_state)
+        
+        # 2. Satura o sinal de controle entre -3 e 3
+        # O 'ctrlrange' do XML!
+        action = np.clip(u_ctrl, -3.0, 3.0)
+        
+        # 3. Aplica a ação (precisa ser um array)
         obs, reward, terminated, truncated, info = env.step(np.array([action]))
         
-        # Salva os dados
-        data['time'].append(t * 0.02) # O timestep do CartPole é 0.02s
-        data['theta'].append(obs[2])  # obs[2] é o ângulo theta
-        data['force'].append(force)
+        data['time'].append(t * env.unwrapped.dt) # env.dt é 0.02
+        data['theta'].append(theta)
+        data['force_signal'].append(action)
         
         if terminated or truncated:
             break
@@ -67,7 +81,7 @@ if __name__ == "__main__":
     
     # 1. Inicializa os controladores
     lqr_ctrl = LQRController()
-    fl_ctrl = FLController(kp=100.0, kd=20.0) # Ajuste Kp e Kd conforme necessário
+    fl_ctrl = FLController(kp_th=100.0, kd_th=20.0, kp_x=3.0, kd_x=5.0) # Ajuste Kp e Kd conforme necessário
 
     # --- Experimento 1: Ângulo Pequeno ---
     print("Rodando Experimento 1: Ângulo Pequeno (3 graus)")
