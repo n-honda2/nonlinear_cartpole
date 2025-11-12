@@ -27,7 +27,7 @@ class LQRController(BaseController):
         B = np.array([[0], [1 / M], [0], [-1 / (M * L)]])
         
         # Define custos (Q para estados, R para controle)
-        Q = np.diag([1, 1, 10, 1])  # Penaliza mais o ângulo
+        Q = np.diag([40, 10, 150, 1])  # Penaliza mais o ângulo
         R = np.array([[0.1]])      # Penaliza o esforço
         
         # Calcula os ganhos K do LQR
