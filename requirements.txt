@@ -9,12 +9,17 @@ fonttools==4.60.1
 fsspec==2025.10.0
 glfw==2.10.0
 gymnasium==1.2.2
+gymnasium-robotics==1.4.1
+ImageIO==2.37.2
 importlib_resources==6.5.2
+Jinja2==3.1.6
 kiwisolver==1.4.9
+MarkupSafe==3.0.3
 matplotlib==3.10.7
 mujoco==3.3.7
 numpy==2.2.6
 packaging==25.0
+pettingzoo==1.25.0
 pillow==12.0.0
 pygame==2.6.1
 PyOpenGL==3.1.10
